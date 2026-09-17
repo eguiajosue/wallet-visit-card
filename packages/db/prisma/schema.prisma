@@ -1,0 +1,235 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Plan {
+  FREE
+  PREMIUM
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  MANAGER
+  CASHIER
+  ANALYST
+}
+
+enum CampaignStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  ENDED
+}
+
+enum RewardMode {
+  FIXED
+  RANDOM
+}
+
+enum IdentityMode {
+  ANONYMOUS
+  PHONE_REQUIRED
+  PHONE_RECOVERY
+  OPTIONAL_LINK
+}
+
+enum CardStatus {
+  ACTIVE
+  REWARD_EARNED
+  REDEEMED
+  COMPLETED
+  EXPIRED
+  REVOKED
+}
+
+enum WalletProvider {
+  APPLE
+  GOOGLE
+  SAMSUNG
+}
+
+enum WalletPassStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  VOIDED
+  ERROR
+}
+
+enum VisitStatus {
+  CONFIRMED
+  CANCELLED
+}
+
+model Tenant {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  plan        Plan     @default(FREE)
+  stripeId    String?  @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  branches    Branch[]
+  memberships Membership[]
+  campaigns   Campaign[]
+  cards       LoyaltyCard[]
+  visits      Visit[]
+  auditEvents AuditEvent[]
+}
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  passwordHash  String?
+  phoneE164     String?  @unique
+  phoneVerified DateTime?
+  createdAt     DateTime @default(now())
+  memberships   Membership[]
+}
+
+model Membership {
+  tenantId String
+  userId   String
+  role     Role
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@id([tenantId, userId])
+}
+
+model Branch {
+  id        String   @id @default(cuid())
+  tenantId  String
+  name      String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  visits    Visit[]
+  @@index([tenantId, active])
+}
+
+model Campaign {
+  id                 String         @id @default(cuid())
+  tenantId           String
+  name               String
+  status             CampaignStatus @default(DRAFT)
+  rewardMode         RewardMode
+  identityMode       IdentityMode
+  visitGoal          Int
+  minimumPurchaseCents Int          @default(0)
+  cooldownMinutes    Int            @default(0)
+  expiresAt          DateTime
+  design             Json
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  tenant             Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  rewards            CampaignReward[]
+  cards              LoyaltyCard[]
+  @@index([tenantId, status])
+}
+
+model CampaignReward {
+  id          String   @id @default(cuid())
+  campaignId  String
+  name        String
+  description String?
+  weight      Int      @default(1)
+  inventory   Int?
+  active      Boolean  @default(true)
+  campaign    Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  grants      RewardGrant[]
+}
+
+model LoyaltyCard {
+  id             String     @id @default(cuid())
+  tenantId       String
+  campaignId     String
+  customerId     String?
+  publicId       String     @unique
+  tokenHash      String     @unique
+  status         CardStatus @default(ACTIVE)
+  visitCount     Int        @default(0)
+  expiresAt      DateTime
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  tenant         Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  campaign       Campaign   @relation(fields: [campaignId], references: [id], onDelete: Restrict)
+  customer       Customer?  @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  visits         Visit[]
+  rewardGrant    RewardGrant?
+  walletPasses   WalletPass[]
+  @@index([tenantId, campaignId, status])
+}
+
+model Customer {
+  id          String   @id @default(cuid())
+  phoneE164   String?
+  phoneHash   String?
+  verifiedAt  DateTime?
+  createdAt   DateTime @default(now())
+  cards       LoyaltyCard[]
+  @@index([phoneHash])
+}
+
+model Visit {
+  id             String      @id @default(cuid())
+  tenantId       String
+  cardId         String
+  branchId       String
+  registeredById String
+  ticketNumber   String
+  purchaseCents  Int
+  idempotencyKey String
+  status         VisitStatus @default(CONFIRMED)
+  cancellationReason String?
+  cancelledAt    DateTime?
+  createdAt      DateTime    @default(now())
+  tenant         Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  card           LoyaltyCard @relation(fields: [cardId], references: [id], onDelete: Restrict)
+  branch         Branch      @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  @@unique([tenantId, ticketNumber])
+  @@unique([tenantId, idempotencyKey])
+  @@index([cardId, createdAt])
+}
+
+model RewardGrant {
+  id          String   @id @default(cuid())
+  cardId      String   @unique
+  rewardId    String
+  revealedAt  DateTime @default(now())
+  redeemedAt  DateTime?
+  redeemedById String?
+  card        LoyaltyCard    @relation(fields: [cardId], references: [id], onDelete: Restrict)
+  reward      CampaignReward @relation(fields: [rewardId], references: [id], onDelete: Restrict)
+}
+
+model WalletPass {
+  id           String           @id @default(cuid())
+  cardId       String
+  provider     WalletProvider
+  providerId   String
+  status       WalletPassStatus @default(PENDING)
+  lastSyncedAt DateTime?
+  createdAt    DateTime         @default(now())
+  card         LoyaltyCard      @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  @@unique([provider, providerId])
+  @@unique([cardId, provider])
+}
+
+model AuditEvent {
+  id          String   @id @default(cuid())
+  tenantId    String
+  actorId     String?
+  action      String
+  entityType  String
+  entityId    String
+  metadata    Json
+  createdAt   DateTime @default(now())
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  @@index([tenantId, createdAt])
+}

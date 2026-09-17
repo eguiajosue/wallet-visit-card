@@ -1,0 +1,17 @@
+{
+  "name": "wallet-visit-card",
+  "private": true,
+  "packageManager": "pnpm@10.17.1",
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "test": "turbo test",
+    "db:generate": "pnpm --filter @visitpass/db prisma generate",
+    "db:migrate": "pnpm --filter @visitpass/db prisma migrate dev"
+  },
+  "devDependencies": {
+    "turbo": "^2.5.6",
+    "typescript": "^5.9.2"
+  }
+}

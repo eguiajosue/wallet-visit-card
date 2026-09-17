@@ -1,0 +1,14 @@
+{
+  "name": "@visitpass/db",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "prisma": "prisma",
+    "build": "prisma generate",
+    "lint": "prisma validate",
+    "test": "prisma validate"
+  },
+  "dependencies": { "@prisma/client": "^6.16.2" },
+  "devDependencies": { "prisma": "^6.16.2" }
+}
+
